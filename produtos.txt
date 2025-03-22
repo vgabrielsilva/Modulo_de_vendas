@@ -1,0 +1,12 @@
+1001
+Teclado mecanico
+249.90
+15
+1002
+Mouse gamer
+89.90
+25
+1003
+Headset com microfone
+159.90
+10
