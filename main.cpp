@@ -4,20 +4,19 @@
 #include <vector>
 #include <iomanip>
 #include <ctime>
-#include <cstring>
 
 using namespace std;
 
 struct Produto {
     int codigo;
-    char descricao[100];
+    string descricao;
     float preco;
     int quantidade;
 };
 
 struct ItemVenda {
     int codigoProduto;
-    char descricao[100];
+    string descricao;
     float precoUnitario;
     int quantidade;
     float subtotal;
@@ -25,23 +24,31 @@ struct ItemVenda {
 
 struct Venda {
     int numeroVenda;
-    char data[11];
+    string data;
     int codigoCliente;
     vector<ItemVenda> itens;
     float totalVenda;
 };
 
-void obterDataAtual(char* data) {
-    time_t now = time(0);
-    tm* ltm = localtime(&now);
+string obterDataAtual() {
+    time_t agora = time(0);
+    tm* tempoLocal = localtime(&agora);
 
-    sprintf(data, "%02d/%02d/%04d", ltm->tm_mday, 1 + ltm->tm_mon, 1900 + ltm->tm_year);
+    string dia = to_string(tempoLocal->tm_mday);
+    if (dia.length() == 1) dia = "0" + dia;
+
+    string mes = to_string(1 + tempoLocal->tm_mon);
+    if (mes.length() == 1) mes = "0" + mes;
+
+    string ano = to_string(1900 + tempoLocal->tm_year);
+
+    return dia + "/" + mes + "/" + ano;
 }
 
 bool buscarProduto(int codigo, Produto* produto) {
     ifstream arquivo("produtos.txt");
 
-    if (!arquivo) {
+    if (!arquivo.is_open()) {
         cout << "Erro ao abrir arquivo de produtos!" << endl;
         return false;
     }
@@ -49,33 +56,42 @@ bool buscarProduto(int codigo, Produto* produto) {
     bool encontrado = false;
     string linha;
 
-    while (arquivo.good()) {
-        int cod;
-        char desc[100];
-        float pr;
-        int qtd;
+    while (getline(arquivo, linha)) {
+        if (linha.empty()) continue;
 
-        getline(arquivo, linha);
-        if (linha.empty() || arquivo.eof()) break;
-        cod = stoi(linha);
+        int codigoProduto;
+        try {
+            codigoProduto = stoi(linha);
+        } catch (...) {
+            continue;
+        }
 
-        getline(arquivo, linha);
-        if (arquivo.eof()) break;
-        strcpy(desc, linha.c_str());
+        string descricaoProduto;
+        if (!getline(arquivo, descricaoProduto)) break;
 
-        getline(arquivo, linha);
-        if (arquivo.eof()) break;
-        pr = stof(linha);
+        string linhaPreco;
+        if (!getline(arquivo, linhaPreco)) break;
+        float precoProduto;
+        try {
+            precoProduto = stof(linhaPreco);
+        } catch (...) {
+            continue;
+        }
 
-        getline(arquivo, linha);
-        if (arquivo.eof()) break;
-        qtd = stoi(linha);
+        string linhaQtd;
+        if (!getline(arquivo, linhaQtd)) break;
+        int quantidadeProduto;
+        try {
+            quantidadeProduto = stoi(linhaQtd);
+        } catch (...) {
+            continue;
+        }
 
-        if (cod == codigo) {
-            produto->codigo = cod;
-            strcpy(produto->descricao, desc);
-            produto->preco = pr;
-            produto->quantidade = qtd;
+        if (codigoProduto == codigo) {
+            produto->codigo = codigoProduto;
+            produto->descricao = descricaoProduto;
+            produto->preco = precoProduto;
+            produto->quantidade = quantidadeProduto;
             encontrado = true;
             break;
         }
@@ -86,21 +102,20 @@ bool buscarProduto(int codigo, Produto* produto) {
 }
 
 bool verificarEstoque(int codigo, int quantidade) {
-    Produto* produto = new Produto;
-    bool disponivel = false;
+    Produto produto;
+    Produto* produtoPtr = &produto;
 
-    if (buscarProduto(codigo, produto)) {
-        disponivel = (produto->quantidade >= quantidade);
+    if (buscarProduto(codigo, produtoPtr)) {
+        return (produtoPtr->quantidade >= quantidade);
     }
 
-    delete produto;
-    return disponivel;
+    return false;
 }
 
 bool verificarCliente(int codigo) {
     ifstream arquivo("clientes.txt");
 
-    if (!arquivo) {
+    if (!arquivo.is_open()) {
         cout << "Erro ao abrir arquivo de clientes!" << endl;
         return false;
     }
@@ -108,23 +123,21 @@ bool verificarCliente(int codigo) {
     string linha;
     bool encontrado = false;
 
-    while (arquivo.good()) {
-        int cod;
+    while (getline(arquivo, linha)) {
+        if (linha.empty()) continue;
 
-        getline(arquivo, linha);
-        if (linha.empty() || arquivo.eof()) break;
-        cod = stoi(linha);
+        int codigoCliente;
+        try {
+            codigoCliente = stoi(linha);
+        } catch (...) {
+            continue;
+        }
 
-        getline(arquivo, linha);
-        if (arquivo.eof()) break;
+        for (int i = 0; i < 3; i++) {
+            if (!getline(arquivo, linha)) break;
+        }
 
-        getline(arquivo, linha);
-        if (arquivo.eof()) break;
-
-        getline(arquivo, linha);
-        if (arquivo.eof()) break;
-
-        if (cod == codigo) {
+        if (codigoCliente == codigo) {
             encontrado = true;
             break;
         }
@@ -135,22 +148,25 @@ bool verificarCliente(int codigo) {
 }
 
 void removerItem(vector<ItemVenda>* itens, float* totalVenda) {
-    int indice;
+    if (itens->empty()) {
+        cout << "Nao ha itens para remover!" << endl;
+        return;
+    }
 
     cout << "\nItens da venda:" << endl;
-    for (size_t i = 0; i < itens->size(); i++) {
-        cout << i + 1 << ". " << (*itens)[i].descricao
+    for (int i = 0; i < itens->size(); i++) {
+        cout << (i + 1) << ". " << (*itens)[i].descricao
              << " - Qtd: " << (*itens)[i].quantidade
              << " - Subtotal: R$ " << fixed << setprecision(2) << (*itens)[i].subtotal << endl;
     }
 
+    int indice;
     cout << "\nDigite o numero do item a remover (0 para cancelar): ";
     cin >> indice;
 
-    if (indice > 0 && indice <= static_cast<int>(itens->size())) {
+    if (indice > 0 && indice <= itens->size()) {
         *totalVenda -= (*itens)[indice - 1].subtotal;
-
-        itens->erase(itens->begin() + indice - 1);
+        itens->erase(itens->begin() + (indice - 1));
         cout << "Item removido com sucesso!" << endl;
     } else if (indice != 0) {
         cout << "Indice invalido!" << endl;
@@ -160,49 +176,49 @@ void removerItem(vector<ItemVenda>* itens, float* totalVenda) {
 void salvarVenda(Venda* venda) {
     ofstream arquivoVendas("vendas.txt");
 
-    if (!arquivoVendas) {
+    if (!arquivoVendas.is_open()) {
         cout << "Erro ao abrir arquivo de vendas!" << endl;
         return;
     }
 
-    arquivoVendas << venda->numeroVenda << endl
-                  << venda->data << endl
-                  << venda->codigoCliente << endl
-                  << venda->itens.size() << endl
-                  << fixed << setprecision(2) << venda->totalVenda << endl;
+    arquivoVendas << venda->numeroVenda << endl;
+    arquivoVendas << venda->data << endl;
+    arquivoVendas << venda->codigoCliente << endl;
+    arquivoVendas << venda->itens.size() << endl;
+    arquivoVendas << fixed << setprecision(2) << venda->totalVenda << endl;
 
-    for (size_t i = 0; i < venda->itens.size(); i++) {
-        arquivoVendas << venda->itens[i].codigoProduto << endl
-                      << venda->itens[i].descricao << endl
-                      << fixed << setprecision(2) << venda->itens[i].precoUnitario << endl
-                      << venda->itens[i].quantidade << endl
-                      << fixed << setprecision(2) << venda->itens[i].subtotal << endl;
+    for (int i = 0; i < venda->itens.size(); i++) {
+        arquivoVendas << venda->itens[i].codigoProduto << endl;
+        arquivoVendas << venda->itens[i].descricao << endl;
+        arquivoVendas << fixed << setprecision(2) << venda->itens[i].precoUnitario << endl;
+        arquivoVendas << venda->itens[i].quantidade << endl;
+        arquivoVendas << fixed << setprecision(2) << venda->itens[i].subtotal << endl;
     }
 
     arquivoVendas.close();
 
     ofstream arquivoEstoque("estoque_venda.txt");
 
-    if (arquivoEstoque) {
-        for (size_t i = 0; i < venda->itens.size(); i++) {
-            arquivoEstoque << venda->itens[i].codigoProduto << endl
-                          << venda->itens[i].quantidade << endl;
+    if (arquivoEstoque.is_open()) {
+        for (int i = 0; i < venda->itens.size(); i++) {
+            arquivoEstoque << venda->itens[i].codigoProduto << endl;
+            arquivoEstoque << venda->itens[i].quantidade << endl;
         }
 
         arquivoEstoque.close();
         cout << "Arquivo para equipe de estoque atualizado: estoque_venda.txt" << endl;
     }
 
-    ofstream saida("contador_vendas.txt");
-    saida << venda->numeroVenda + 1;
-    saida.close();
+    ofstream contadorVendas("contador_vendas.txt");
+    contadorVendas << (venda->numeroVenda + 1);
+    contadorVendas.close();
 }
 
 int obterProximoNumeroVenda() {
     ifstream arquivo("contador_vendas.txt");
     int contador = 1;
 
-    if (arquivo) {
+    if (arquivo.is_open()) {
         arquivo >> contador;
         arquivo.close();
     }
@@ -212,18 +228,16 @@ int obterProximoNumeroVenda() {
 
 void realizarVenda() {
     Venda* venda = new Venda;
-    ItemVenda item;
-    Produto* produto = new Produto;
-    int codigo, quantidade, opcao;
 
     venda->numeroVenda = obterProximoNumeroVenda();
-    obterDataAtual(venda->data);
+    venda->data = obterDataAtual();
     venda->totalVenda = 0.0;
 
     cout << "\n==== NOVA VENDA ====" << endl;
     cout << "Numero da Venda: " << venda->numeroVenda << endl;
     cout << "Data: " << venda->data << endl;
 
+    int opcao;
     cout << "\nDeseja vincular esta venda a um cliente? (1-Sim / 0-Nao): ";
     cin >> opcao;
 
@@ -240,7 +254,6 @@ void realizarVenda() {
     }
 
     bool vendaAtiva = true;
-    bool vendaFinalizada = false;
 
     while (vendaAtiva) {
         cout << "\n--- Menu de Venda ---" << endl;
@@ -253,36 +266,43 @@ void realizarVenda() {
         cin >> opcao;
 
         switch (opcao) {
-            case 1:
+            case 1: {
+                int codigo, quantidade;
                 cout << "\nCodigo do Produto: ";
                 cin >> codigo;
 
-                if (buscarProduto(codigo, produto)) {
-                    cout << "Descricao: " << produto->descricao << endl;
-                    cout << "Preco: R$ " << fixed << setprecision(2) << produto->preco << endl;
-                    cout << "Quantidade disponivel: " << produto->quantidade << endl;
+                Produto produto;
+                Produto* produtoPtr = &produto;
+
+                if (buscarProduto(codigo, produtoPtr)) {
+                    cout << "Descricao: " << produtoPtr->descricao << endl;
+                    cout << "Preco: R$ " << fixed << setprecision(2) << produtoPtr->preco << endl;
+                    cout << "Quantidade disponivel: " << produtoPtr->quantidade << endl;
 
                     cout << "Quantidade a comprar: ";
                     cin >> quantidade;
 
                     if (quantidade <= 0) {
                         cout << "Quantidade invalida!" << endl;
-                        continue;
+                        break;
                     }
 
                     if (!verificarEstoque(codigo, quantidade)) {
                         cout << "Estoque insuficiente!" << endl;
-                        continue;
+                        break;
                     }
 
-                    item.codigoProduto = produto->codigo;
-                    strcpy(item.descricao, produto->descricao);
-                    item.precoUnitario = produto->preco;
-                    item.quantidade = quantidade;
-                    item.subtotal = item.precoUnitario * item.quantidade;
+                    ItemVenda* item = new ItemVenda;
+                    item->codigoProduto = produtoPtr->codigo;
+                    item->descricao = produtoPtr->descricao;
+                    item->precoUnitario = produtoPtr->preco;
+                    item->quantidade = quantidade;
+                    item->subtotal = item->precoUnitario * item->quantidade;
 
-                    venda->itens.push_back(item);
-                    venda->totalVenda += item.subtotal;
+                    venda->itens.push_back(*item);
+                    venda->totalVenda += item->subtotal;
+
+                    delete item;
 
                     cout << "Produto adicionado a venda!" << endl;
                     cout << "Total atual: R$ " << fixed << setprecision(2) << venda->totalVenda << endl;
@@ -290,12 +310,13 @@ void realizarVenda() {
                     cout << "Produto nao encontrado!" << endl;
                 }
                 break;
+            }
 
             case 2:
                 if (venda->itens.empty()) {
                     cout << "Nao ha itens na venda atual!" << endl;
                 } else {
-                    removerItem(&(venda->itens), &(venda->totalVenda));
+                    removerItem(&venda->itens, &venda->totalVenda);
                 }
                 break;
 
@@ -350,7 +371,6 @@ void realizarVenda() {
                     if (opcao == 1) {
                         salvarVenda(venda);
                         cout << "Venda finalizada com sucesso!" << endl;
-                        vendaFinalizada = true;
                         vendaAtiva = false;
                     }
                 }
@@ -371,7 +391,6 @@ void realizarVenda() {
         }
     }
 
-    delete produto;
     delete venda;
 }
 
