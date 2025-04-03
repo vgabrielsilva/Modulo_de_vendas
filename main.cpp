@@ -7,11 +7,27 @@
 
 using namespace std;
 
+#define NOME_TAM 48
+#define NOME_PRODUTO_TAM 32
+#define TIPO_TAM 16
+
 struct Produto {
-    int codigo;
-    string descricao;
+    int id;
+    int Quantidade;
+    char dia[3];
+    char mes[3];
+    char ano[5];
+    float precoTotal;
     float preco;
-    int quantidade;
+    bool disponivel;
+    char categoria[TIPO_TAM+1];
+    char TipoUnidade[TIPO_TAM+1];
+    char nome[NOME_PRODUTO_TAM+1];
+};
+
+struct TabelaProduto {
+    int qtd;
+    Produto *dados;
 };
 
 struct ItemVenda {
@@ -30,6 +46,136 @@ struct Venda {
     float totalVenda;
 };
 
+void carregarTabelaCadsProduto(TabelaProduto &tabela) {
+    ifstream arquivo("Produtos_DB.dat", ios::binary);
+    if (!arquivo) {
+        cerr << "Erro ao abrir o arquivo para leitura! Criando nova tabela vazia..." << endl;
+        tabela.qtd = 0;
+        tabela.dados = nullptr;
+        return;
+    }
+
+    arquivo.read(reinterpret_cast<char *>(&tabela.qtd), sizeof(int));
+
+    if (tabela.qtd <= 0 || tabela.qtd > 1000) {
+        cerr << "Quantidade de produtos invalida: " << tabela.qtd << ". Criando tabela vazia..." << endl;
+        tabela.qtd = 0;
+        tabela.dados = nullptr;
+        arquivo.close();
+        return;
+    }
+
+    delete[] tabela.dados;
+
+    tabela.dados = new Produto[tabela.qtd];
+
+    for (int i = 0; i < tabela.qtd; i++) {
+        arquivo.read(reinterpret_cast<char *>(&tabela.dados[i]), sizeof(Produto));
+        if (arquivo.fail()) {
+            cerr << "Erro ao ler o produto " << i+1 << ". Leitura parcial realizada." << endl;
+            tabela.qtd = i;
+            break;
+        }
+    }
+
+    arquivo.close();
+    cout << "Produtos carregados com sucesso! Total: " << tabela.qtd << endl;
+
+    cout << "IDs dos produtos carregados: ";
+    for (int i = 0; i < tabela.qtd; i++) {
+        cout << tabela.dados[i].id << " ";
+    }
+    cout << endl;
+}
+
+void listarProdutosDisponiveis(const TabelaProduto &tabela) {
+    if (!tabela.dados || tabela.qtd <= 0) {
+        cout << "Nenhum produto disponivel para exibicao!" << endl;
+        return;
+    }
+
+    cout << "\n===== PRODUTOS DISPONIVEIS =====" << endl;
+    cout << setw(6) << "ID" << setw(32) << "Nome" << setw(16) << "Categoria"
+         << setw(12) << "Unidade" << setw(10) << "Preco" << setw(10) << "Estoque"
+         << setw(10) << "Disponivel" << endl;
+    cout << string(96, '-') << endl;
+
+    int produtosDisponiveis = 0;
+    int produtosIndisponiveis = 0;
+    int produtosZeroEstoque = 0;
+
+    for (int i = 0; i < tabela.qtd; i++) {
+        cout << setw(6) << tabela.dados[i].id
+             << setw(32) << tabela.dados[i].nome
+             << setw(16) << tabela.dados[i].categoria
+             << setw(12) << tabela.dados[i].TipoUnidade
+             << setw(10) << fixed << setprecision(2) << tabela.dados[i].preco
+             << setw(10) << tabela.dados[i].Quantidade
+             << setw(10) << (tabela.dados[i].disponivel ? "Sim" : "Nao") << endl;
+
+        if (!tabela.dados[i].disponivel) {
+            produtosIndisponiveis++;
+        } else if (tabela.dados[i].Quantidade <= 0) {
+            produtosZeroEstoque++;
+        } else {
+            produtosDisponiveis++;
+        }
+    }
+
+    cout << "\nTotal de produtos carregados: " << tabela.qtd << endl;
+    cout << "Produtos disponiveis (ativos e com estoque): " << produtosDisponiveis << endl;
+    cout << "Produtos indisponiveis (nao ativos): " << produtosIndisponiveis << endl;
+    cout << "Produtos sem estoque (ativos mas estoque zero): " << produtosZeroEstoque << endl;
+}
+
+void buscarProdutoPorNome(const TabelaProduto &tabela) {
+    if (!tabela.dados || tabela.qtd <= 0) {
+        cout << "Nenhum produto disponivel para busca!" << endl;
+        return;
+    }
+
+    string termoBusca;
+    cout << "Digite o nome ou parte do nome do produto: ";
+    cin.ignore();
+    getline(cin, termoBusca);
+
+    for (char &c : termoBusca) {
+        c = tolower(c);
+    }
+
+    cout << "\n===== RESULTADOS DA BUSCA =====" << endl;
+    cout << setw(6) << "ID" << setw(32) << "Nome" << setw(16) << "Categoria"
+         << setw(12) << "Unidade" << setw(10) << "Preco" << setw(10) << "Estoque" << endl;
+    cout << string(86, '-') << endl;
+
+    int produtosEncontrados = 0;
+
+    for (int i = 0; i < tabela.qtd; i++) {
+        if (tabela.dados[i].disponivel) {
+            string nomeProduto = tabela.dados[i].nome;
+            for (char &c : nomeProduto) {
+                c = tolower(c);
+            }
+
+            if (nomeProduto.find(termoBusca) != string::npos) {
+                cout << setw(6) << tabela.dados[i].id
+                     << setw(32) << tabela.dados[i].nome
+                     << setw(16) << tabela.dados[i].categoria
+                     << setw(12) << tabela.dados[i].TipoUnidade
+                     << setw(10) << fixed << setprecision(2) << tabela.dados[i].preco
+                     << setw(10) << tabela.dados[i].Quantidade << endl;
+                produtosEncontrados++;
+            }
+        }
+    }
+
+    if (produtosEncontrados == 0) {
+        cout << "Nenhum produto encontrado com o termo '" << termoBusca << "'." << endl;
+    } else {
+        cout << "\nTotal de produtos encontrados: " << produtosEncontrados << endl;
+    }
+}
+
 string obterDataAtual() {
     time_t agora = time(0);
     tm* tempoLocal = localtime(&agora);
@@ -45,68 +191,27 @@ string obterDataAtual() {
     return dia + "/" + mes + "/" + ano;
 }
 
-bool buscarProduto(int codigo, Produto* produto) {
-    ifstream arquivo("produtos.txt");
-
-    if (!arquivo.is_open()) {
-        cout << "Erro ao abrir arquivo de produtos!" << endl;
+bool buscarProduto(int codigo, Produto* produto, TabelaProduto &tabela) {
+    if (!tabela.dados || tabela.qtd <= 0) {
+        cout << "Tabela de produtos vazia ou nao carregada!" << endl;
         return false;
     }
 
-    bool encontrado = false;
-    string linha;
-
-    while (getline(arquivo, linha)) {
-        if (linha.empty()) continue;
-
-        int codigoProduto;
-        try {
-            codigoProduto = stoi(linha);
-        } catch (...) {
-            continue;
-        }
-
-        string descricaoProduto;
-        if (!getline(arquivo, descricaoProduto)) break;
-
-        string linhaPreco;
-        if (!getline(arquivo, linhaPreco)) break;
-        float precoProduto;
-        try {
-            precoProduto = stof(linhaPreco);
-        } catch (...) {
-            continue;
-        }
-
-        string linhaQtd;
-        if (!getline(arquivo, linhaQtd)) break;
-        int quantidadeProduto;
-        try {
-            quantidadeProduto = stoi(linhaQtd);
-        } catch (...) {
-            continue;
-        }
-
-        if (codigoProduto == codigo) {
-            produto->codigo = codigoProduto;
-            produto->descricao = descricaoProduto;
-            produto->preco = precoProduto;
-            produto->quantidade = quantidadeProduto;
-            encontrado = true;
-            break;
+    for (int i = 0; i < tabela.qtd; i++) {
+        if (tabela.dados[i].id == codigo && tabela.dados[i].disponivel) {
+            *produto = tabela.dados[i];
+            return true;
         }
     }
 
-    arquivo.close();
-    return encontrado;
+    return false;
 }
 
-bool verificarEstoque(int codigo, int quantidade) {
+bool verificarEstoque(int codigo, int quantidade, TabelaProduto &tabela) {
     Produto produto;
-    Produto* produtoPtr = &produto;
 
-    if (buscarProduto(codigo, produtoPtr)) {
-        return (produtoPtr->quantidade >= quantidade);
+    if (buscarProduto(codigo, &produto, tabela)) {
+        return (produto.Quantidade >= quantidade);
     }
 
     return false;
@@ -173,7 +278,33 @@ void removerItem(vector<ItemVenda>* itens, float* totalVenda) {
     }
 }
 
-void salvarVenda(Venda* venda) {
+void atualizarEstoqueProdutos(vector<ItemVenda>& itens, TabelaProduto &tabela) {
+    bool alteracoes = false;
+
+    for (const ItemVenda& item : itens) {
+        for (int i = 0; i < tabela.qtd; i++) {
+            if (tabela.dados[i].id == item.codigoProduto) {
+                tabela.dados[i].Quantidade -= item.quantidade;
+                alteracoes = true;
+                break;
+            }
+        }
+    }
+
+    if (alteracoes) {
+        ofstream arquivo("Produtos_DB.dat", ios::binary | ios::trunc);
+        if (arquivo.is_open()) {
+            arquivo.write(reinterpret_cast<char*>(&tabela.qtd), sizeof(int));
+            arquivo.write(reinterpret_cast<char*>(tabela.dados), tabela.qtd * sizeof(Produto));
+            arquivo.close();
+            cout << "Estoque atualizado com sucesso!" << endl;
+        } else {
+            cout << "ERRO: Falha ao atualizar estoque no arquivo binario!" << endl;
+        }
+    }
+}
+
+void salvarVenda(Venda* venda, TabelaProduto &tabela) {
     ofstream arquivoVendas("vendas.txt");
 
     if (!arquivoVendas.is_open()) {
@@ -197,17 +328,7 @@ void salvarVenda(Venda* venda) {
 
     arquivoVendas.close();
 
-    ofstream arquivoEstoque("estoque_venda.txt");
-
-    if (arquivoEstoque.is_open()) {
-        for (int i = 0; i < venda->itens.size(); i++) {
-            arquivoEstoque << venda->itens[i].codigoProduto << endl;
-            arquivoEstoque << venda->itens[i].quantidade << endl;
-        }
-
-        arquivoEstoque.close();
-        cout << "Arquivo para equipe de estoque atualizado: estoque_venda.txt" << endl;
-    }
+    atualizarEstoqueProdutos(venda->itens, tabela);
 
     ofstream contadorVendas("contador_vendas.txt");
     contadorVendas << (venda->numeroVenda + 1);
@@ -226,7 +347,7 @@ int obterProximoNumeroVenda() {
     return contador;
 }
 
-void realizarVenda() {
+void realizarVenda(TabelaProduto &tabela) {
     Venda* venda = new Venda;
 
     venda->numeroVenda = obterProximoNumeroVenda();
@@ -260,8 +381,10 @@ void realizarVenda() {
         cout << "1. Buscar e adicionar produto" << endl;
         cout << "2. Remover item" << endl;
         cout << "3. Exibir itens atuais" << endl;
-        cout << "4. Finalizar venda" << endl;
-        cout << "5. Cancelar venda" << endl;
+        cout << "4. Listar produtos disponiveis" << endl;
+        cout << "5. Buscar produto por nome" << endl;
+        cout << "6. Finalizar venda" << endl;
+        cout << "7. Cancelar venda" << endl;
         cout << "Escolha uma opcao: ";
         cin >> opcao;
 
@@ -272,12 +395,11 @@ void realizarVenda() {
                 cin >> codigo;
 
                 Produto produto;
-                Produto* produtoPtr = &produto;
 
-                if (buscarProduto(codigo, produtoPtr)) {
-                    cout << "Descricao: " << produtoPtr->descricao << endl;
-                    cout << "Preco: R$ " << fixed << setprecision(2) << produtoPtr->preco << endl;
-                    cout << "Quantidade disponivel: " << produtoPtr->quantidade << endl;
+                if (buscarProduto(codigo, &produto, tabela)) {
+                    cout << "Descricao: " << produto.nome << endl;
+                    cout << "Preco: R$ " << fixed << setprecision(2) << produto.preco << endl;
+                    cout << "Quantidade disponivel: " << produto.Quantidade << endl;
 
                     cout << "Quantidade a comprar: ";
                     cin >> quantidade;
@@ -287,15 +409,15 @@ void realizarVenda() {
                         break;
                     }
 
-                    if (!verificarEstoque(codigo, quantidade)) {
+                    if (!verificarEstoque(codigo, quantidade, tabela)) {
                         cout << "Estoque insuficiente!" << endl;
                         break;
                     }
 
                     ItemVenda* item = new ItemVenda;
-                    item->codigoProduto = produtoPtr->codigo;
-                    item->descricao = produtoPtr->descricao;
-                    item->precoUnitario = produtoPtr->preco;
+                    item->codigoProduto = produto.id;
+                    item->descricao = produto.nome;
+                    item->precoUnitario = produto.preco;
                     item->quantidade = quantidade;
                     item->subtotal = item->precoUnitario * item->quantidade;
 
@@ -307,7 +429,7 @@ void realizarVenda() {
                     cout << "Produto adicionado a venda!" << endl;
                     cout << "Total atual: R$ " << fixed << setprecision(2) << venda->totalVenda << endl;
                 } else {
-                    cout << "Produto nao encontrado!" << endl;
+                    cout << "Produto nao encontrado ou indisponivel!" << endl;
                 }
                 break;
             }
@@ -341,6 +463,14 @@ void realizarVenda() {
                 break;
 
             case 4:
+                listarProdutosDisponiveis(tabela);
+                break;
+
+            case 5:
+                buscarProdutoPorNome(tabela);
+                break;
+
+            case 6:
                 if (venda->itens.empty()) {
                     cout << "Nao e possivel finalizar uma venda sem itens!" << endl;
                 } else {
@@ -369,14 +499,14 @@ void realizarVenda() {
                     cin >> opcao;
 
                     if (opcao == 1) {
-                        salvarVenda(venda);
+                        salvarVenda(venda, tabela);
                         cout << "Venda finalizada com sucesso!" << endl;
                         vendaAtiva = false;
                     }
                 }
                 break;
 
-            case 5:
+            case 7:
                 cout << "Tem certeza que deseja cancelar a venda? (1-Sim / 0-Nao): ";
                 cin >> opcao;
 
@@ -396,17 +526,39 @@ void realizarVenda() {
 
 int main() {
     int opcao;
+    TabelaProduto tabela = {0, nullptr};
+
+    carregarTabelaCadsProduto(tabela);
+
+    if (tabela.qtd <= 0) {
+        cout << "AVISO: Nenhum produto carregado. Verifique o arquivo 'Produtos_DB.dat'!" << endl;
+    }
 
     do {
         cout << "\n===== MODULO DE VENDAS =====" << endl;
         cout << "1. Nova Venda" << endl;
+        cout << "2. Listar Produtos Disponiveis" << endl;
+        cout << "3. Buscar Produto por Nome" << endl;
+        cout << "4. Recarregar Produtos" << endl;
         cout << "0. Sair" << endl;
         cout << "Escolha uma opcao: ";
         cin >> opcao;
 
         switch (opcao) {
             case 1:
-                realizarVenda();
+                realizarVenda(tabela);
+                break;
+            case 2:
+                listarProdutosDisponiveis(tabela);
+                break;
+            case 3:
+                buscarProdutoPorNome(tabela);
+                break;
+            case 4:
+                delete[] tabela.dados;
+                tabela.dados = nullptr;
+                tabela.qtd = 0;
+                carregarTabelaCadsProduto(tabela);
                 break;
             case 0:
                 cout << "Saindo do modulo de vendas..." << endl;
@@ -415,6 +567,8 @@ int main() {
                 cout << "Opcao invalida!" << endl;
         }
     } while (opcao != 0);
+
+    delete[] tabela.dados;
 
     return 0;
 }
